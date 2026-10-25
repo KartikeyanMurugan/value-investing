@@ -8,3 +8,7 @@ export const RESTRICTED = {};
 
 // Fraction of quality checks a stock must pass to appear in "Today's picks"
 export const MIN_QUALITY = 0.8;
+
+// Smaller companies are excluded from "Today's picks" (still visible under All stocks):
+// their data is less reliable and shares are harder to trade. Market cap in ₹ crore.
+export const MIN_MCAP_CR = 500;

@@ -60,6 +60,9 @@ def universe() -> pd.DataFrame:
 
 
 # ---------------- rates ----------------
+GSEC_INFO: dict = {"source": "fallback (last known)"}
+
+
 def gsec_yield(prev: float) -> float:
     """India 10-yr government bond yield (%), monthly OECD series via FRED (no API key)."""
     try:
@@ -69,6 +72,7 @@ def gsec_yield(prev: float) -> float:
         v = float(df.iloc[-1, 1])
         if 3 < v < 15:
             log(f"G-sec 10y: {v}% ({df.iloc[-1, 0]})")
+            GSEC_INFO.update(source="FRED/OECD", asof=str(df.iloc[-1, 0]))
             return v
     except Exception as e:  # noqa: BLE001
         log("G-sec fetch failed, keeping", prev, e)
@@ -125,6 +129,20 @@ def prices(symbols: list[str]) -> dict[str, dict]:
 
 
 # ---------------- fundamentals from Yahoo ----------------
+_FX: dict[str, float] = {}
+
+
+def fx_to_inr(cur: str) -> float | None:
+    if cur not in _FX:
+        try:
+            h = yf.Ticker(f"{cur}INR=X").history(period="5d")["Close"].dropna()
+            _FX[cur] = float(h.iloc[-1]) if len(h) else None
+            log(f"FX {cur}→INR {_FX[cur]}")
+        except Exception as e:  # noqa: BLE001
+            log("FX failed", cur, e)
+            _FX[cur] = None
+    return _FX[cur]
+
 def _row(df: pd.DataFrame, names: list[str]):
     if df is None or df.empty:
         return None
@@ -154,8 +172,26 @@ def from_yahoo(sym: str) -> dict | None:
         info = t.info or {}
     except Exception:  # noqa: BLE001
         pass
+    # Some companies (e.g. Infosys) report in USD on Yahoo — convert everything to rupees
+    cur = (info.get("financialCurrency") or "INR").upper()
+    fx = 1.0
+    if cur != "INR":
+        fx = fx_to_inr(cur)
+        if not fx:
+            return None
+    S = lambda df, names, scale=CR / fx: _series(df, names, cols, scale)  # noqa: E731
+
+    # share count: info first, then the balance sheet / income statement
     sh = info.get("sharesOutstanding")
-    S = lambda df, names, scale=CR: _series(df, names, cols, scale)  # noqa: E731
+    if not sh:
+        for df, names in ((bal, ["Ordinary Shares Number", "Share Issued"]),
+                          (inc, ["Diluted Average Shares", "Basic Average Shares"])):
+            r = _row(df, names)
+            if r is not None:
+                vals = [r.get(c) for c in cols if pd.notna(r.get(c))]
+                if vals:
+                    sh = float(vals[-1])
+                    break
 
     sales = S(inc, ["Total Revenue", "Operating Revenue"])
     np_ = S(inc, ["Net Income Common Stockholders", "Net Income", "Net Income From Continuing Operation Net Minority Interest"])
@@ -181,7 +217,7 @@ def from_yahoo(sym: str) -> dict | None:
                                  "ttmSales": ["Total Revenue"], "ttmOi": ["Other Income", "Other Non Operating Income Expenses"]}.items():
                     r = _row(q, names)
                     if r is not None and all(pd.notna(r.get(c)) for c in qc):
-                        ttm[k] = round(float(sum(r.get(c) for c in qc)) / CR, 2)
+                        ttm[k] = round(float(sum(r.get(c) for c in qc)) * fx / CR, 2)
     except Exception:  # noqa: BLE001
         pass
 
@@ -221,7 +257,7 @@ def from_yahoo(sym: str) -> dict | None:
         "nb": S(bal, ["Net PPE"]),
         "cfo": S(cf, ["Operating Cash Flow"]),
         "capex": [abs(v) if v is not None else None for v in capex_raw],
-        "pe": pe, "pb": pb, **ttm, "src": "yahoo",
+        "pe": pe, "pb": pb, **ttm, "src": "yahoo", "cur": cur,
     }
 
 
@@ -270,6 +306,10 @@ def main():
         p = FUND_DIR / f"{s}.json"
         return json.loads(p.read_text()).get("fetched", "0000") if p.exists() else ""
     todo = sorted(symbols, key=age)
+    cached = sum(1 for s in symbols if (FUND_DIR / f"{s}.json").exists())
+    if cached < 0.5 * len(symbols):
+        log(f"only {cached} cached — doing a full refresh")
+        a.full = True
     if not a.full:
         todo = todo[:a.refresh]
     ok = 0
@@ -311,7 +351,7 @@ def main():
 
     meta.update({
         "date": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-        "count": len(companies), "universe": len(symbols),
+        "count": len(companies), "universe": len(symbols), "gsecInfo": GSEC_INFO,
         "watchlist": sorted(overrides),
     })
     META_CACHE.write_text(json.dumps(meta, indent=1))

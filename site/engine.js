@@ -48,12 +48,25 @@ export function derive(c) {
       capex.push(Math.max(0, c.nb[i] - c.nb[i - 1] + dCw + (c.dep?.[i] ?? 0)));
     } else capex.push(null);
   }
+  // One-off guard: a year whose profit jumps > 3x the median of earlier years (asset sale, legal
+  // settlement, tax write-back…) is replaced by a normal level for valuation purposes.
+  const oneOffYears = [];
+  const normCore = coreNp.map((v, i) => {
+    const prior = coreNp.slice(0, i).filter((x) => isNum(x) && x > 0);
+    if (!isNum(v) || prior.length < 2) return v;
+    const m = median(prior);
+    if (v > 3 * m) { oneOffYears.push(c.y?.[i] ?? i); return m * 1.25; }
+    return v;
+  });
   const sh = c.sh;
   const eq = last(c.eq), debt = last(c.debt) ?? 0, cash = last(c.cash) ?? 0, inv = last(c.inv) ?? 0;
   const netCash = cash + inv - debt;
+  // Equity earnings are already after interest, so debt must NOT be subtracted again from
+  // earnings-based values (that double-counts it). Only surplus cash & investments are added.
+  const surplusCash = cash + inv;
   // capital employed in operations (excludes surplus cash/investments)
   const capEmp = (c.eq || []).map((e, i) => isNum(e) ? e + (c.debt?.[i] ?? 0) - (c.cash?.[i] ?? 0) - (c.inv?.[i] ?? 0) : null);
-  const roicSeries = coreNp.map((p, i) => isNum(p) && isNum(capEmp[i]) && capEmp[i] > 0 ? p / capEmp[i] : null);
+  const roicSeries = normCore.map((p, i) => isNum(p) && isNum(capEmp[i]) && capEmp[i] > 0 ? p / capEmp[i] : null);
   const roeSeries = (c.np || []).map((p, i) => isNum(p) && isNum(c.eq?.[i]) && c.eq[i] > 0 ? p / c.eq[i] : null);
   const opm = (c.ebitda || []).map((e, i) => isNum(e) && isNum(c.sales?.[i]) && c.sales[i] > 0 ? e / c.sales[i] : null);
   // Cyclicality = how often profit actually fell, not plain variance (fast growth also has high variance)
@@ -66,24 +79,29 @@ export function derive(c) {
   const cyclicalScore = bigDrops + 2 * lossYears;
   const profitCV = (() => { const m = avg(p10); return m && m > 0 ? stdev(p10) / m : 9; })();
   // Latest earnings: trailing 4 quarters when available (fresher than last annual report)
-  const ttmCore = isNum(c.ttmNp) ? c.ttmNp - (c.type === 'financial' || !isNum(c.ttmOi) ? 0 : c.ttmOi * (1 - (taxRate[n - 1] ?? 0.25))) : null;
+  let ttmCore = isNum(c.ttmNp) ? c.ttmNp - (c.type === 'financial' || !isNum(c.ttmOi) ? 0 : c.ttmOi * (1 - (taxRate[n - 1] ?? 0.25))) : null;
+  const priorAll = normCore.filter((x) => isNum(x) && x > 0);
+  if (isNum(ttmCore) && priorAll.length >= 2 && ttmCore > 3 * median(priorAll)) {
+    oneOffYears.push('TTM'); ttmCore = Math.max(...priorAll.slice(-1)) * 1.1;
+  }
   const roce = (c.pbt || []).map((p, i) => isNum(p) && isNum(c.eq?.[i]) ? (p + (c.int?.[i] ?? 0)) / (c.eq[i] + (c.debt?.[i] ?? 0)) : null);
   return {
-    taxRate, coreNp, capex, netCash, eq, debt, cash, inv,
-    avg5Core: avg(lastN(coreNp, 5)),
-    avgAllCore: avg(lastN(coreNp, 10)),
-    lastCore: ttmCore ?? last(coreNp),
+    taxRate, coreNp, normCore, oneOffYears, capex, netCash, surplusCash, eq, debt, cash, inv,
+    avg5Core: avg(lastN(normCore, 5)),
+    avgAllCore: avg(lastN(normCore, 10)),
+    lastCore: ttmCore ?? last(normCore),
     ttmCore,
-    eps: (ttmCore ?? last(coreNp)) != null && sh ? (ttmCore ?? last(coreNp)) / sh : null,
+    eps: (ttmCore ?? last(normCore)) != null && sh ? (ttmCore ?? last(normCore)) / sh : null,
     bvps: eq != null && sh ? eq / sh : null,
     roic: avg(lastN(roicSeries, 5)),
     roicLatest: last(roicSeries),
     roce5: avg(lastN(roce, 5)),
     cyclicalScore,
     roe: avg(lastN(roeSeries, 5)),
+    roeLatest: last(roeSeries),
     opmAvg: avg(lastN(opm, 10)),
     salesCagr5: cagr(c.sales, 5),
-    profitCagr5: cagr(coreNp, 5),
+    profitCagr5: cagr(normCore, 5),
     profitCV,
     nwc: (last(c.rec) ?? 0) + (last(c.invt) ?? 0) - (last(c.ol) ?? 0),
   };
@@ -150,7 +168,7 @@ export function dcfValue(c, d, r, g1, gT, highYears = 5) {
   }
   if (r <= gT) return null;
   const tv = E * (1 + gT) * (1 - clamp(gT / roic, 0, 0.9)) / (r - gT) / (1 + r) ** N;
-  return (pv + tv + d.netCash) / c.sh;
+  return (pv + tv + d.surplusCash) / c.sh;
 }
 
 export function impliedGrowth(c, d, r, gT, price, highYears = 5) {
@@ -169,11 +187,11 @@ const METHODS = {
   // plus surplus cash/investments, minus debt, minus any working-capital shortfall.
   epv: (c, d, p) => {
     if (!(d.avg5Core > 0)) return null;
-    return (d.avg5Core / p.r + d.netCash + Math.min(0, d.nwc)) / c.sh;
+    return (d.avg5Core / p.r + d.surplusCash) / c.sh;
   },
   normalisedEPV: (c, d, p) => {
     if (!(d.avgAllCore > 0)) return null;
-    return (d.avgAllCore / p.r + d.netCash + Math.min(0, d.nwc)) / c.sh;
+    return (d.avgAllCore / p.r + d.surplusCash) / c.sh;
   },
   dcf: (c, d, p) => dcfValue(c, d, p.r, p.g1, p.gT, p.highYears),
   peRelative: (c, d) => {
@@ -198,9 +216,11 @@ const METHODS = {
   },
   justifiedPB: (c, d, p) => {
     if (!(d.roe > 0) || !(d.bvps > 0)) return null;
+    // sustainable ROE: the lower of average and latest, capped — boom-year returns don't last
+    const roe = Math.min(d.roe, d.roeLatest ?? d.roe, 0.22);
     const payout = clamp(sum(lastN(c.div, 5)) / Math.max(1, sum(lastN(c.np, 5))), 0, 1);
-    const g = Math.min(d.roe * (1 - payout), p.r - 0.02, 0.1);
-    const pb = clamp((d.roe - g) / (p.r - g), 0.3, 6);
+    const g = Math.min(roe * (1 - payout), p.r - 0.02, 0.1);
+    const pb = clamp((roe - g) / (p.r - g), 0.3, 6);
     return pb * d.bvps;
   },
   pbHistory: (c, d) => {
@@ -209,9 +229,9 @@ const METHODS = {
   },
   ddm: (c, d, p) => {
     const dv = lastN(c.div, 5);
-    if (dv.length < 5 || dv.some((v) => !(v > 0))) return null;
-    const dps = dv[4] / c.sh;
-    const g = clamp(cagr(dv, 4) ?? 0, 0, Math.min(0.06, p.r - 0.03));
+    if (dv.length < 3 || dv.some((v) => !(v > 0))) return null;
+    const dps = dv[dv.length - 1] / c.sh;
+    const g = clamp(cagr(dv, dv.length - 1) ?? 0, 0, Math.min(0.06, p.r - 0.03));
     return dps * (1 + g) / (p.r - g);
   },
 };
@@ -228,7 +248,7 @@ export function quality(c, d, type) {
   const checks = [];
   const add = (label, pass, detail) => checks.push({ label, pass, detail });
   const np5 = lastN(c.np, 5);
-  add('Profit positive 5 yrs', np5.length >= 5 && np5.every((v) => v > 0), np5.map((v) => Math.round(v)).join(', '));
+  add(`Profit positive every year (${np5.length} yrs)`, np5.length >= 3 && np5.every((v) => v > 0), np5.map((v) => Math.round(v)).join(', '));
   if (type !== 'financial') {
     const cfo5 = sum(lastN(c.cfo, 5)), npS = sum(np5);
     const conv = npS > 0 && lastN(c.cfo, 5).length ? cfo5 / npS : null;
@@ -296,6 +316,7 @@ export function value(c, opts = {}) {
 
   let zone;
   if (!fair || !price) zone = { key: 'na', label: type === 'loss' ? 'Not valuable by formula' : 'Insufficient data', rank: 9 };
+  else if (fair > 3 * price) zone = { key: 'verify', label: 'Too cheap — verify data', rank: 5 };
   else if (price <= Math.min(low, buyBelow)) zone = { key: 'strong', label: 'Strong buy zone', rank: 0 };
   else if (price <= buyBelow) zone = { key: 'buy', label: 'Buy zone', rank: 1 };
   else if (price <= high) zone = { key: 'fair', label: 'Fairly priced', rank: 2 };

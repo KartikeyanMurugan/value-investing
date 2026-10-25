@@ -79,6 +79,9 @@ The methods are blended into a fair value. The spread between methods sets a low
 | 🟡 Fairly priced | Price inside the range |
 | 🟠 Overvalued | Price above the range |
 | 🔴 Priced for perfection | The growth the price implies is more than 2× what the company has actually delivered |
+| ⚠️ Too cheap — verify data | Fair value is more than 3× the price. Almost always a data issue (share count, currency, one-off gain), so it's excluded from picks |
+
+**Today's picks** also require at least 80% of quality checks passed and a market cap of at least ₹500 crore (both editable in `site/config.js`).
 
 ### 4. Methods in brief
 
@@ -92,6 +95,12 @@ The methods are blended into a fair value. The spread between methods sets a low
 - **Graham number and Graham growth formula:** shown as reference.
 
 **Core profit** excludes after-tax other income, since cash and investments are already added separately. Otherwise that income would be counted twice.
+
+**Debt is not subtracted from earnings-based values.** Net profit is already after interest, so subtracting debt again would count it twice. Debt still matters through the debt-to-equity quality check, and through EV/EBITDA, which values the whole enterprise and then subtracts debt.
+
+**One-off profits** (asset sales, legal settlements) are detected when a year's profit jumps more than 3× the median of earlier years. That year is replaced with a normal level, and the stock page notes it.
+
+**Banks and NBFCs** use a sustainable ROE: the lower of the 5-year average and the latest year, capped at 22%. Boom-year returns don't last.
 
 ## Data sources
 
@@ -138,7 +147,7 @@ pipeline/
   fetch.py            daily job: NSE list → Yahoo → Screener exports → stocks.json
   screener_export.py  parser for Screener.in "Export to Excel" files
 screener_exports/     optional Screener.in exports
-data/                 cached fundamentals (generated)
+data/                 cached fundamentals (generated; kept in the GitHub Actions cache, not the repo)
 tests/                offline tests with synthetic companies
 .github/workflows/    daily schedule + GitHub Pages deploy
 ```

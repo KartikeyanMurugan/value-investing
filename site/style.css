@@ -54,7 +54,8 @@ input[type=range] { accent-color: var(--brand); width: 100%; }
 .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .z-strong { color: var(--strong); background: var(--strong-bg); } .z-buy { color: var(--buy); background: var(--buy-bg); }
 .z-fair { color: var(--fair); background: var(--fair-bg); } .z-over { color: var(--over); background: var(--over-bg); }
-.z-bubble { color: var(--bubble); background: var(--bubble-bg); } .z-na, .z-restricted { color: var(--na); background: var(--na-bg); }
+.z-bubble { color: var(--bubble); background: var(--bubble-bg); } .z-verify { color: var(--fair); background: var(--fair-bg); outline: 1px dashed var(--fair); }
+.z-na, .z-restricted { color: var(--na); background: var(--na-bg); }
 .zc small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
 .star { border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--line); padding: 0; }
 .star.on { color: #d8a72b; }

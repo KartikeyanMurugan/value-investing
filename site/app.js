@@ -1,5 +1,5 @@
 import { value, METHOD_LABEL, TYPE_LABEL, DEFAULTS } from './engine.js';
-import { RESTRICTED, MIN_QUALITY } from './config.js';
+import { RESTRICTED, MIN_QUALITY, MIN_MCAP_CR } from './config.js';
 
 const $ = (s) => document.querySelector(s);
 const store = {
@@ -61,7 +61,8 @@ function compute() {
 }
 
 function isPick(v) {
-  return !v.restricted && (v.zone.key === 'strong' || v.zone.key === 'buy') && v.quality.score >= MIN_QUALITY;
+  return !v.restricted && (v.zone.key === 'strong' || v.zone.key === 'buy') && v.quality.score >= MIN_QUALITY
+    && v.price * v.c.sh >= MIN_MCAP_CR;
 }
 
 function render() {
@@ -78,7 +79,7 @@ function render() {
   rows = [...rows].sort((a, b) => a.zone.rank - b.zone.rank || (b.discount ?? -9) - (a.discount ?? -9));
 
   $('#hint').textContent = {
-    picks: `Quality stocks (pass ≥ ${Math.round(MIN_QUALITY * 100)}% of checks) trading at least ${state.mos}% below fair value. Sorted by discount.`,
+    picks: `Quality stocks (pass ≥ ${Math.round(MIN_QUALITY * 100)}% of checks, market cap ≥ ₹${MIN_MCAP_CR} cr) trading at least ${state.mos}% below fair value. Sorted by discount.`,
     watch: 'Your starred stocks and any Screener exports in the repo. Tap ☆ on any row to add.',
     all: 'Every stock with enough data, best value first.',
   }[state.tab];
@@ -135,6 +136,8 @@ function detail(sym) {
       <p style="margin:0"><button id="rToggle" class="linkbtn">${state.restricted[sym] ? 'Remove restricted mark' : 'Mark as restricted (my employer / insider)'}</button></p>
       ${v.restricted ? `<p class="alert">${esc(v.restricted)} Formula verdict: ${v.zone.label}.</p>` : ''}
       <p class="verdict">${verdict}<br>${igLine}</p>
+      ${v.zone.key === 'verify' ? '<p class="alert">Fair value is more than 3× the price. That usually means a data problem (wrong share count, currency, or a one-off gain) rather than a real bargain. Check the annual report before trusting it.</p>' : ''}
+      ${d.oneOffYears?.length ? `<p class="alert">Unusual profit jump in ${d.oneOffYears.join(', ')} treated as one-off — normal earnings used instead.</p>` : ''}
       ${v.fair ? `<div class="range" aria-hidden="true"><div class="track"></div>
         <div class="band" style="left:${X(v.low)};width:calc(${X(v.high)} - ${X(v.low)})"></div>
         <div class="mk up" style="left:${X(v.fair)}"><span>fair ${inr(v.fair)}</span></div>
