@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Value Compass</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23205c4a'/><path d='M16 6l4 10-4 10-4-10z' fill='%23f3efe6'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>Value Compass</h1>
+      <p class="sub" id="asof">Loading…</p>
+    </div>
+  </div>
+  <div class="controls">
+    <label class="ctl">
+      <span>Risk premium over G-sec <b id="erpV"></b></span>
+      <input id="erp" type="range" min="0" max="8" step="0.5">
+      <small>Discount rate <b id="rV"></b> = G-sec <b id="gV"></b> + premium</small>
+    </label>
+    <label class="ctl">
+      <span>Margin of safety <b id="mosV"></b></span>
+      <input id="mos" type="range" min="10" max="50" step="5">
+      <small>Buy-below = fair value − this %</small>
+    </label>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="picks" aria-selected="true">Today's picks <span class="n" id="nPicks"></span></button>
+  <button role="tab" data-tab="watch">Watchlist <span class="n" id="nWatch"></span></button>
+  <button role="tab" data-tab="all">All stocks <span class="n" id="nAll"></span></button>
+</nav>
+
+<section class="bar">
+  <input id="q" type="search" placeholder="Search name or symbol…" autocomplete="off">
+  <select id="fZone">
+    <option value="">All zones</option>
+    <option value="strong">Strong buy zone</option>
+    <option value="buy">Buy zone</option>
+    <option value="fair">Fairly priced</option>
+    <option value="over">Overvalued</option>
+    <option value="bubble">Priced for perfection</option>
+  </select>
+  <select id="fType"><option value="">All business types</option></select>
+</section>
+
+<p class="hint" id="hint"></p>
+<main id="list" class="list"></main>
+
+<dialog id="detail"></dialog>
+
+<footer>Valuation models, not advice. Data: NSE list, Yahoo Finance, your Screener exports. Check numbers before acting.</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
