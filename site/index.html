@@ -4,58 +4,98 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Value Compass</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23205c4a'/><path d='M16 6l4 10-4 10-4-10z' fill='%23f3efe6'/></svg>">
+<meta name="description" content="Daily intrinsic value for every NSE stock: fair value range, buy-below price and quality checks.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232F4BD8'/><rect x='6' y='14' width='20' height='4' rx='2' fill='%23BFD8FF'/><circle cx='12' cy='16' r='4.5' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <span class="mark" aria-hidden="true"></span>
-    <div>
-      <h1>Value Compass</h1>
-      <p class="sub" id="asof">Loading…</p>
-    </div>
-  </div>
-  <div class="controls">
-    <label class="ctl">
-      <span>Risk premium over G-sec <b id="erpV"></b></span>
-      <input id="erp" type="range" min="0" max="8" step="0.5">
-      <small>Discount rate <b id="rV"></b> = G-sec <b id="gV"></b> + premium</small>
-    </label>
-    <label class="ctl">
-      <span>Margin of safety <b id="mosV"></b></span>
-      <input id="mos" type="range" min="10" max="50" step="5">
-      <small>Buy-below = fair value − this %</small>
-    </label>
-  </div>
+<a class="skip" href="#main">Skip to stock list</a>
+
+<header class="masthead">
+  <a class="brand" href="#" aria-label="Value Compass home">
+    <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--brand)"/><rect x="6" y="14" width="20" height="4" rx="2" fill="var(--brand-soft)"/><circle cx="12" cy="16" r="4.5" fill="#fff"/></svg>
+    <span>Value Compass</span>
+  </a>
+  <p class="updated" id="updated">Loading today's data…</p>
+  <button class="btn ghost" id="settingsBtn" aria-expanded="false" aria-controls="settings">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h11a3 3 0 0 1 6 0h1v2h-1a3 3 0 0 1-6 0H3V6zm14 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM3 16h1a3 3 0 0 1 6 0h11v2H10a3 3 0 0 1-6 0H3v-2zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+    <span id="settingsSummary">Assumptions</span>
+  </button>
 </header>
 
-<nav class="tabs" role="tablist">
-  <button role="tab" data-tab="picks" aria-selected="true">Today's picks <span class="n" id="nPicks"></span></button>
-  <button role="tab" data-tab="watch">Watchlist <span class="n" id="nWatch"></span></button>
-  <button role="tab" data-tab="all">All stocks <span class="n" id="nAll"></span></button>
-</nav>
-
-<section class="bar">
-  <input id="q" type="search" placeholder="Search name or symbol…" autocomplete="off">
-  <select id="fZone">
-    <option value="">All zones</option>
-    <option value="strong">Strong buy zone</option>
-    <option value="buy">Buy zone</option>
-    <option value="fair">Fairly priced</option>
-    <option value="over">Overvalued</option>
-    <option value="bubble">Priced for perfection</option>
-    <option value="verify">Too cheap — verify data</option>
-  </select>
-  <select id="fType"><option value="">All business types</option></select>
+<section class="settings" id="settings" hidden>
+  <div class="setting">
+    <label for="erp">Risk premium over government bonds <output id="erpV"></output></label>
+    <input id="erp" type="range" min="0" max="8" step="0.5">
+    <p>Your required return is the 10-year G-sec yield (<span id="gsecV"></span>) plus this premium: <strong id="rV"></strong>. Higher means stricter valuations.</p>
+  </div>
+  <div class="setting">
+    <label for="mos">Margin of safety <output id="mosV"></output></label>
+    <input id="mos" type="range" min="10" max="50" step="5">
+    <p>How far below fair value a stock must trade to count as a buy. It protects you when the estimate is wrong.</p>
+  </div>
+  <div class="setting">
+    <label for="minCap">Smallest company in Picks <output id="minCapV"></output></label>
+    <input id="minCap" type="range" min="0" max="5" step="1">
+    <p>Small companies have patchier data and thinner trading. They still appear under All stocks.</p>
+  </div>
+  <button class="btn" id="resetSettings">Reset to defaults</button>
 </section>
 
-<p class="hint" id="hint"></p>
-<main id="list" class="list"></main>
+<section class="pulse" aria-labelledby="pulseTitle">
+  <h1 id="pulseTitle">Loading…</h1>
+  <div class="pulse-bar" id="pulseBar" role="group" aria-label="All valued stocks by verdict — select a segment to filter"></div>
+  <ul class="pulse-legend" id="pulseLegend"></ul>
+</section>
 
-<dialog id="detail"></dialog>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button role="tab" data-tab="picks" id="tab-picks">Today's picks <span class="count" id="nPicks"></span></button>
+  <button role="tab" data-tab="watch" id="tab-watch">Watchlist <span class="count" id="nWatch"></span></button>
+  <button role="tab" data-tab="all" id="tab-all">All stocks <span class="count" id="nAll"></span></button>
+  <button role="tab" data-tab="how" id="tab-how">How it works</button>
+</nav>
 
-<footer>Valuation models, not advice. Data: NSE list, Yahoo Finance, your Screener exports. Check numbers before acting.</footer>
+<main id="main">
+  <div class="toolbar" id="toolbar">
+    <label class="search"><span class="sr">Search</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4a6 6 0 1 0 3.5 10.9l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+      <input id="q" type="search" placeholder="Company or NSE symbol" autocomplete="off">
+    </label>
+    <label class="sel"><span class="sr">Verdict</span><select id="fZone"></select></label>
+    <label class="sel"><span class="sr">Business type</span><select id="fType"></select></label>
+    <label class="sel"><span class="sr">Company size</span><select id="fSize">
+      <option value="">All sizes</option>
+      <option value="large">Large · over ₹20,000 cr</option>
+      <option value="mid">Mid · ₹5,000–20,000 cr</option>
+      <option value="small">Small · ₹500–5,000 cr</option>
+      <option value="micro">Micro · under ₹500 cr</option>
+    </select></label>
+    <label class="sel"><span class="sr">Sort</span><select id="sort">
+      <option value="gap">Biggest discount first</option>
+      <option value="quality">Highest quality first</option>
+      <option value="mcap">Largest company first</option>
+      <option value="chg">Biggest fall today</option>
+      <option value="name">Name A–Z</option>
+    </select></label>
+  </div>
+  <p class="context" id="context"></p>
+
+  <div class="table" id="table" role="table" aria-label="Stocks"></div>
+  <nav class="pager" id="pager" aria-label="Pages"></nav>
+
+  <article class="how" id="how" hidden></article>
+</main>
+
+<aside class="drawer" id="drawer" aria-modal="true" role="dialog" aria-labelledby="dTitle" hidden></aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<footer class="foot">
+  <p>Valuation models built on public data, not investment advice. Figures can be wrong; verify with the company's annual report before acting.</p>
+  <p>Data: NSE, Yahoo Finance, OECD via FRED. <a href="https://github.com/KartikeyanMurugan/value-investing">Source code on GitHub</a></p>
+</footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -214,7 +214,8 @@ def from_yahoo(sym: str) -> dict | None:
             qc = sorted(q.columns)[-4:]
             if len(qc) == 4:
                 for k, names in {"ttmNp": ["Net Income Common Stockholders", "Net Income"],
-                                 "ttmSales": ["Total Revenue"], "ttmOi": ["Other Income", "Other Non Operating Income Expenses"]}.items():
+                                 "ttmSales": ["Total Revenue"], "ttmOi": ["Other Income", "Other Non Operating Income Expenses"],
+                                 "ttmUnusual": ["Total Unusual Items", "Total Unusual Items Excluding Goodwill"]}.items():
                     r = _row(q, names)
                     if r is not None and all(pd.notna(r.get(c)) for c in qc):
                         ttm[k] = round(float(sum(r.get(c) for c in qc)) * fx / CR, 2)
@@ -245,6 +246,8 @@ def from_yahoo(sym: str) -> dict | None:
         "sales": sales,
         "ebitda": S(inc, ["EBITDA", "Normalized EBITDA"]),
         "oi": S(inc, ["Other Income", "Other Non Operating Income Expenses"]),
+        # one-off gains/losses (asset sales, demergers, write-offs) — removed from core profit
+        "unusual": S(inc, ["Total Unusual Items", "Total Unusual Items Excluding Goodwill"]),
         "dep": S(inc, ["Reconciled Depreciation", "Depreciation And Amortization In Income Statement"]),
         "int": S(inc, ["Interest Expense", "Interest Expense Non Operating"]),
         "pbt": S(inc, ["Pretax Income"]),
@@ -258,6 +261,12 @@ def from_yahoo(sym: str) -> dict | None:
         "cfo": S(cf, ["Operating Cash Flow"]),
         "capex": [abs(v) if v is not None else None for v in capex_raw],
         "pe": pe, "pb": pb, **ttm, "src": "yahoo", "cur": cur,
+        "ySum": {  # Yahoo's own summary numbers (per share values converted to ₹)
+            "bv": round(info["bookValue"] * fx, 2) if info.get("bookValue") else None,
+            "roe": info.get("returnOnEquity"),
+            "mcap": round(info["marketCap"] / CR, 1) if info.get("marketCap") else None,
+            "pe": info.get("trailingPE"),
+        },
     }
 
 
@@ -339,7 +348,7 @@ def main():
         if not c:
             continue
         c["s"] = s
-        c["n"] = c.get("n") or names.get(s, s)
+        c["n"] = names.get(s) or c.get("n") or s  # NSE's official name; Yahoo's can be stale
         if s in overrides and p.exists():  # keep Yahoo's sector labels for Screener-sourced data
             y = json.loads(p.read_text())
             c["sec"], c["ind"] = y.get("sec"), y.get("ind")

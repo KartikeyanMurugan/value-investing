@@ -24,25 +24,33 @@ Value Compass fixes all three: fully automatic, sector-aware, and it shows a val
 
 ## What you see
 
+**Market today.** The top line says how many valued stocks trade below fair value and how many also pass the quality checks. Below it, a bar splits the whole market by verdict; select a segment to list those stocks.
+
+**Three lists:**
+
 | Tab | Shows |
 |---|---|
-| **Today's picks** | Quality companies trading at least your margin of safety (default 30%) below fair value |
-| **Watchlist** | Stocks you star (saved in your browser) |
-| **All stocks** | Everything, cheapest first, filterable by verdict and business type |
+| **Today's picks** | Quality companies (≥ ₹500 crore market cap) at least your margin of safety below fair value |
+| **Watchlist** | Stocks you star, saved in your browser |
+| **All stocks** | Everything, with search, filters by verdict, business type and company size, sorting, and pages of 25, 50 or 100 |
 
-Tap any stock for the full breakdown:
+**The value band** on every row shows the fair-value range (green), the central estimate (dark tick), your buy-below price (green tick), and today's price (dot, coloured by verdict).
+
+**Select any stock** for a detail panel:
 
 ![Stock detail](docs/stock-detail.png)
 
-- **Verdict:** Strong buy zone · Buy zone · Fairly priced · Overvalued · Priced for perfection
-- **Fair value range** and **buy-below price**, drawn against today's price
-- **Each valuation method**, its weight, and its result
-- **Implied growth:** the yearly profit growth today's price assumes, vs what the company actually achieved
-- **Quality checks:** 5 years of profit, cash conversion, debt, ROCE, other income
-- **Entry timing** for long-term buyers: 200-day average, 52-week range, RSI
-- **Sliders:** risk premium, margin of safety, and a per-stock growth assumption
+- A plain-English verdict and the growth today's price is betting on
+- Key numbers: market cap, P/E, P/B, ROE, debt to equity, dividend yield
+- Each valuation method, its weight, and its value against today's price
+- A growth slider to test your own assumption
+- Sales and profit history
+- Quality checks and entry timing (200-day average, 52-week range, RSI)
+- Notes when data looks suspicious, and links to Screener.in, NSE and TradingView to check it yourself
 
-Works on mobile:
+**Assumptions** (top right): risk premium, margin of safety, and the smallest company allowed in picks. Saved in your browser.
+
+Every view has its own link (filters, page, open stock), so you can bookmark or share it. Works on phones and in dark mode:
 
 <img src="docs/mobile.png" width="300" alt="Mobile view">
 
@@ -79,7 +87,7 @@ The methods are blended into a fair value. The spread between methods sets a low
 | 🟡 Fairly priced | Price inside the range |
 | 🟠 Overvalued | Price above the range |
 | 🔴 Priced for perfection | The growth the price implies is more than 2× what the company has actually delivered |
-| ⚠️ Too cheap — verify data | Fair value is more than 3× the price. Almost always a data issue (share count, currency, one-off gain), so it's excluded from picks |
+| ⚠️ Verify data | Fair value is more than 3× the price. Almost always a data issue (share count, currency, one-off gain), so it's excluded from picks |
 
 **Today's picks** also require at least 80% of quality checks passed and a market cap of at least ₹500 crore (both editable in `site/config.js`).
 
@@ -99,6 +107,8 @@ The methods are blended into a fair value. The spread between methods sets a low
 **Debt is not subtracted from earnings-based values.** Net profit is already after interest, so subtracting debt again would count it twice. Debt still matters through the debt-to-equity quality check, and through EV/EBITDA, which values the whole enterprise and then subtracts debt.
 
 **One-off profits** (asset sales, legal settlements) are detected when a year's profit jumps more than 3× the median of earlier years. That year is replaced with a normal level, and the stock page notes it.
+
+**Data cross-checks.** Book value and share count from the financial statements are compared with Yahoo's own summary figures; when they disagree by more than 25%, the summary is used and the stock page says so. Yahoo's "unusual items" (asset sales, demergers, write-offs) are removed from core profit. Company names come from NSE's official list.
 
 **Banks and NBFCs** use a sustainable ROE: the lower of the 5-year average and the latest year, capped at 22%. Boom-year returns don't last.
 
