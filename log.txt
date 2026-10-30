@@ -1,0 +1,9 @@
+== NSE session
+  seed /: HTTP 200, cookies=3
+  seed /companies-listing/corporate-filings-financial-results: HTTP 200, cookies=6
+== HDFCBANK
+== BSE HDFCBANK
+== INFY
+== BSE INFY
+== COALINDIA
+== BSE COALINDIA
