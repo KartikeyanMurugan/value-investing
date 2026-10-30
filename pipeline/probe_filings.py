@@ -20,6 +20,7 @@ import requests
 OUT = Path(__file__).resolve().parents[1] / "probe"
 OUT.mkdir(exist_ok=True)
 TESTS = ["HDFCBANK", "INFY", "COALINDIA"]
+SKIP_ANNUAL = True  # second probe: annual results already confirmed
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 NSE = "https://www.nseindia.com"
@@ -122,6 +123,7 @@ def probe_symbol(nse: NSESession, sym: str) -> dict:
         out["annual_listing_keys"] = sorted(rows[0].keys())
         out["annual_periods"] = sorted({str(r.get("toDate") or r.get("to_date") or r.get("period") or "") for r in rows})
 
+    rows = rows[:0] if SKIP_ANNUAL else rows
     # Parse up to 3 most recent annual filings (one consolidated + one standalone if present)
     parsed = []
     for r in rows[:6]:
@@ -162,6 +164,28 @@ def probe_symbol(nse: NSESession, sym: str) -> dict:
     data = (js or {}).get("data", []) if isinstance(js, dict) else []
     out["integrated_status"] = st
     out["integrated_count"] = len(data)
+    if data:
+        out["integrated_keys"] = sorted(data[0].keys())
+        out["integrated_rows"] = [{k: r.get(k) for k in r if k not in ("xbrl",)} for r in data[:6]]
+        samples = OUT / "samples"; samples.mkdir(exist_ok=True)
+        saved = 0
+        for r in data:
+            url = next((r.get(k) for k in ("xbrl", "xbrlFile", "xbrl_url", "attachmentFile") if r.get(k)), None)
+            if not url or not str(url).startswith("http"):
+                continue
+            fst, blob = nse.file(url)
+            out.setdefault("integrated_downloads", []).append({"url": url, "http": fst, "bytes": len(blob or b"")})
+            if blob:
+                (samples / f"{sym}_IF_{saved}.xml").write_bytes(blob[:600_000]); saved += 1
+            time.sleep(1)
+            if saved >= 2:
+                break
+
+    # 2b) Promoter pledge data
+    st, js = nse.api("corporate-pledgedata", {"index": "equities", "symbol": sym},
+                     "/companies-listing/corporate-filings-pledged-data")
+    out["pledge_status"] = st
+    out["pledge_sample"] = (js.get("data", [])[:2] if isinstance(js, dict) else js[:2] if isinstance(js, list) else None)
 
     # 3) Shareholding pattern (promoter holding, pledge)
     st, js = nse.api("corporate-share-holdings-master", {"index": "equities", "symbol": sym},
