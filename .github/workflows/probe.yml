@@ -1,0 +1,38 @@
+name: Probe official filings (test)
+
+# Manual test only: checks whether NSE/BSE filings can be fetched from GitHub's servers.
+# Results are saved to the "probe-results" branch. Does not touch the live dashboard.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - run: pip install nse-xbrl-parser bse requests
+
+      - name: Probe NSE and BSE
+        continue-on-error: true
+        run: python pipeline/probe_filings.py
+
+      - name: Save results to probe-results branch
+        run: |
+          mkdir -p /tmp/out && cp -r probe/* /tmp/out/ 2>/dev/null || echo "no probe output" > /tmp/out/none.txt
+          git config user.name "value-bot"
+          git config user.email "value-bot@users.noreply.github.com"
+          git checkout --orphan probe-results
+          git rm -rq --cached . && rm -rf ./* .github
+          cp -r /tmp/out/* .
+          git add -A
+          git commit -qm "probe $(date -u +%FT%H%M)"
+          git push -f origin probe-results
